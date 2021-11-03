@@ -28,8 +28,8 @@
 #include <ThingsBoard.h>
 
 //wifi and device on Thingsboard
-#define WIFI_AP "tollieollie"
-#define WIFI_PASSWORD "Jaketom5"
+#define WIFI_AP "NDSU IoT"
+#define WIFI_PASSWORD "bacondotwager"
 #define TOKEN "AlfXtRanSlldLQG2tZNz"
 char thingsboardServer[] = "134.129.122.213";
 WiFiClient wifiClient;

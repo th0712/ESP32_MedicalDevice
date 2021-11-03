@@ -130,8 +130,9 @@ AutoConnectAux    Timezone;
 //wifi and device on Thingsboard
 //#define WIFI_AP "tollieollie"
 //#define WIFI_PASSWORD "Jaketom5"
-#define TOKEN "taT2D3ax1cHSJQ6PE1gA"
-char thingsboardServer[] = "134.129.97.131";
+//#define TOKEN "A1_TEST_TOKEN"    //Dev board
+#define TOKEN "ecg_spaches"      //Prototype
+char thingsboardServer[] = "134.129.122.213";
 WiFiClient wifiClient;
 ThingsBoard tb(wifiClient);
 int status = WL_IDLE_STATUS;
@@ -151,6 +152,15 @@ unsigned long long real_time;
 unsigned long long previous_ts;
 int ii = 0;
 
+//LED Time Variables
+unsigned long current_time_LED;
+unsigned long previous_time_LED;
+unsigned long elapsed_time_LED = 0;
+float voltage = 0.0f;
+float percentage = 0.0f;
+int battStatus = 5; //Start in default mode (not transmitting)
+int ledState = LOW;   // ledState used to set the LED
+
 //Packet format
 #define  CES_CMDIF_PKT_START_1      0x0A
 #define  CES_CMDIF_PKT_START_2      0xFA
@@ -163,6 +173,9 @@ int ii = 0;
 #define ADS1292_CS_PIN 15
 #define ADS1292_START_PIN 0
 #define ADS1292_PWDN_PIN 2
+#define GRN_LED 27
+#define RED_LED 26
+#define BATTERY_IN 39
 
 #define TEMPERATURE 0
 #define FILTERORDER         161
@@ -309,9 +322,17 @@ void setup()
   pinMode(ADS1292_CS_PIN, OUTPUT);    //7
   pinMode(ADS1292_START_PIN, OUTPUT);  //5
   pinMode(ADS1292_PWDN_PIN, OUTPUT);  //4
+  
+  //LED and battery read pins
+  pinMode(GRN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BATTERY_IN, INPUT);
+  digitalWrite(RED_LED, HIGH);
 
+  analogReadResolution(12);
   Serial.begin(115200);  // Baudrate for serial communica
-
+  delay(50);
+  
    //set up wifi
   //InitWiFi();
   
@@ -364,6 +385,23 @@ void loop()
   Portal.handleClient();
   
   timeClient.update();
+
+  //voltage read
+  voltage = ReadVoltage(BATTERY_IN);//ADC to voltage conversion
+  percentage = 2808.3808*pow(voltage,4)-43560.9157*pow(voltage,3)+252848.5888*pow(voltage,2)-650767.4615*voltage+626532.5703; //curve fit of LiPo
+  if(voltage > 4.19) percentage = 100; //upper limit
+  if(voltage < 3.5) percentage = 0; //Lower limit
+  if(percentage < 10){
+    battStatus = 0;
+  }else if(percentage < 20){
+    battStatus = 1;
+  }else{
+    battStatus = 2;
+  }
+
+  current_time_LED = millis();                              //get current time for LED function
+  elapsed_time_LED = current_time_LED - previous_time_LED;  //calculate elapsed time for LED function
+  LEDFunction(battStatus);
   
   if ( !tb.connected() ) {
     reconnect();
@@ -515,8 +553,8 @@ void reconnect() {
     if ( tb.connect(thingsboardServer, TOKEN) ) {
 //      Serial.println( "[DONE]" );
     } else {
-//      Serial.print( "[FAILED]" );
-//      Serial.println( " : retrying in 5 seconds]" );
+     Serial.print( "[FAILED]" );
+      Serial.println( " : retrying in 5 seconds]" );
       // Wait 5 seconds before retrying
       delay( 5000 );
     }
@@ -856,4 +894,58 @@ static void QRS_check_sample_crossing_threshold( uint16_t scaled_result )
   global_HeartRate = (uint8_t)QRS_Heart_Rate;
   //Serial.println(global_HeartRate);
 
+}
+
+double ReadVoltage(uint8_t pin){
+  double reading = analogRead(pin); // Reference voltage is 3v3 so maximum reading is 3v3 = 4095 in range 0 to 4095
+  if(reading < 1 || reading > 4095) return 0;
+  //return (-0.000000000000016 * pow(reading,4) + 0.000000000118171 * pow(reading,3)- 0.000000301211691 * pow(reading,2)+ 0.001109019271794 * reading + 0.034143524634089)*2; //original fir from creator
+  return (-.0000000000000096795072211912461* pow(reading,4) + .000000000064564581092594387 * pow(reading,3) - .00000014328287130333392 * pow(reading,2)+ .00090565621090209041 * reading + .11253959753849530)*2;
+} 
+
+void LEDFunction (int battStatus){
+  switch(battStatus){
+    case 0: //Battery criticially low (less than 10%)
+    {
+      if(elapsed_time_LED > 1000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, LOW);
+        digitalWrite(RED_LED, ledState);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    case 1: //Battery < 20%
+    {
+      if(elapsed_time_LED > 1000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, LOW);
+        digitalWrite(RED_LED, ledState);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    case 2: //Battery > 20%
+    {
+      if(elapsed_time_LED > 2000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, ledState);
+        digitalWrite(RED_LED, LOW);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
 }
