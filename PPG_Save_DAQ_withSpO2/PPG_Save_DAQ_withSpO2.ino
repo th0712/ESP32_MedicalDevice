@@ -23,13 +23,17 @@
 #include <stdio.h>
 
 #include <WiFi.h>
+#include <WebServer.h>
+#include <time.h>
+#include <AutoConnect.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <ThingsBoard.h>
 
+
 //wifi and device on Thingsboard
-#define WIFI_AP "NDSU IoT"
-#define WIFI_PASSWORD "bacondotwager"
+//#define WIFI_AP "NDSU IoT"
+//#define WIFI_PASSWORD "bacondotwager"
 #define TOKEN "AlfXtRanSlldLQG2tZNz"
 char thingsboardServer[] = "134.129.122.213";
 WiFiClient wifiClient;
@@ -37,6 +41,10 @@ ThingsBoard tb(wifiClient);
 int status = WL_IDLE_STATUS;
 unsigned long lastSend;
 
+//Autoconnect Wifi
+WebServer Server;
+AutoConnect Portal(Server);
+AutoConnectConfig Config;
 
 //NTP library to get real time from server
 #define NTP_OFFSET   0 * 60      // In seconds
@@ -45,6 +53,14 @@ unsigned long lastSend;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 
+//LED Time Variables
+unsigned long current_time_LED;
+unsigned long previous_time_LED;
+unsigned long elapsed_time_LED = 0;
+float voltage = 0.0f;
+float percentage = 0.0f;
+int battStatus = 5; //Start in default mode (not transmitting)
+int ledState = LOW;   // ledState used to set the LED
 
 //afe44xx Register definition
 #define CONTROL0    0x00
@@ -126,6 +142,9 @@ const int SPIDRDY = 4;  // data ready pin - IO4
 volatile int drdy_trigger = LOW;
 const int RESET = 0; // reset pin - IO0
 const int PWDN = 2; // powerdown pin - IO2
+#define GRN_LED 27          //TBD after soldering
+#define RED_LED 26          //TBD after soldering
+#define BATTERY_IN 39
 
 void afe44xxInit (void);
 void afe44xxWrite (uint8_t address, uint32_t data);
@@ -189,13 +208,33 @@ unsigned long long real_time;
 unsigned long long previous_ts;
 int ii = 0;
 
+void rootPage(){
+  char content[] = "ESP32 Autoconnect Setup";
+  Server.send(200, "text/plain", content);
+}
 
 void setup()
 {
   Serial.begin(115200);
     // Serial.begin(57600);
   //Serial.begin(9600);
-  InitWiFi();
+  //InitWiFi();
+  
+  // Enable saved past credential by autoReconnect option,
+  // even once it is disconnected.
+  Config.autoReconnect = false;
+  Config.retainPortal = true;
+  Config.autoRise = true;
+  //Config.preserveAPMode = true;
+  Config.immediateStart = true;
+  Config.hostName = "esp32-01";
+  Portal.config(Config);
+  Server.on("/", rootPage);
+  // Establish a connection with an autoReconnect option.
+  if (Portal.begin()) {
+    Serial.println("WiFi connected: " + WiFi.localIP().toString());
+    Serial.println(WiFi.getHostname());
+  }
   timeClient.begin();
   timeClient.update();
   timestamp = timeClient.getEpochTime();
@@ -208,6 +247,12 @@ void setup()
   
   Serial.println("Intilazition AFE44xx.. ");
   delay(2000) ;   // pause for a moment
+    //LED and battery read pins
+  pinMode(GRN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BATTERY_IN, INPUT);
+  digitalWrite(RED_LED, HIGH);
+  analogReadResolution(12);
   //SPI.begin();
   SPI.begin(14,12,13,15);
 
@@ -255,7 +300,26 @@ void setup()
 
 void loop()
 {
+  Portal.handleClient();
   timeClient.update();
+
+    //voltage read
+  voltage = ReadVoltage(BATTERY_IN);//ADC to voltage conversion
+  percentage = 2808.3808*pow(voltage,4)-43560.9157*pow(voltage,3)+252848.5888*pow(voltage,2)-650767.4615*voltage+626532.5703; //curve fit of LiPo
+  if(voltage > 4.19) percentage = 100; //upper limit
+  if(voltage < 3.5) percentage = 0; //Lower limit
+  
+  if(percentage < 10){
+    battStatus = 0;
+  }else if(percentage < 50){
+    battStatus = 1;
+  }else{
+    battStatus = 2;
+  }
+
+  current_time_LED = millis();                              //get current time for LED function
+  elapsed_time_LED = current_time_LED - previous_time_LED;  //calculate elapsed time for LED function
+  LEDFunction(battStatus);
   
   if ( !tb.connected() ) {
     reconnect();
@@ -356,32 +420,32 @@ void getAndSendPPG(int n_buffer_count, unsigned long long real_time)
 }
 
 
-void InitWiFi()
-{
+//void InitWiFi()
+//{
 //  Serial.println("Connecting to AP ...");
   // attempt to connect to WiFi network
 
-  WiFi.begin(WIFI_AP, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  //WiFi.begin(WIFI_AP, WIFI_PASSWORD);
+  //while (WiFi.status() != WL_CONNECTED) {
+    //delay(500);
 //    Serial.print(".");
-  }
+ // }
 //  Serial.println("Connected to AP");
-}
+//}
 
 
 void reconnect() {
   // Loop until we're reconnected
   while (!tb.connected()) {
-    status = WiFi.status();
-    if ( status != WL_CONNECTED) {
-      WiFi.begin(WIFI_AP, WIFI_PASSWORD);
-      while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
+    //status = WiFi.status();
+    //if ( status != WL_CONNECTED) {
+      //WiFi.begin(WIFI_AP, WIFI_PASSWORD);
+      //while (WiFi.status() != WL_CONNECTED) {
+        //delay(500);
 //        Serial.print(".");
-      }
-      Serial.println("Connected to AP");
-    }
+      //}
+      //Serial.println("Connected to AP");
+    //}
     Serial.print("Connecting to ThingsBoard node ...");
     if ( tb.connect(thingsboardServer, TOKEN) ) {
       Serial.println( "[DONE]" );
@@ -721,3 +785,55 @@ void sort_indices_descend(  int32_t  *pn_x, int32_t *pn_indx, int32_t n_size)
     pn_indx[j] = n_temp;
   }
 }
+double ReadVoltage(uint8_t pin){
+  double reading = analogRead(pin); // Reference voltage is 3v3 so maximum reading is 3v3 = 4095 in range 0 to 4095
+  if(reading < 1 || reading > 4095) return 0;
+  //return (-0.000000000000016 * pow(reading,4) + 0.000000000118171 * pow(reading,3)- 0.000000301211691 * pow(reading,2)+ 0.001109019271794 * reading + 0.034143524634089)*2; //original fir from creator
+  return (-.0000000000000096795072211912461* pow(reading,4) + .000000000064564581092594387 * pow(reading,3) - .00000014328287130333392 * pow(reading,2)+ .00090565621090209041 * reading + .11253959753849530)*2;
+} 
+
+void LEDFunction (int battStatus){
+  switch(battStatus){
+    case 0: //Battery criticially low (less than 10%)
+    {
+      if(elapsed_time_LED > 1000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, LOW);
+        digitalWrite(RED_LED, ledState);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    case 1: //Battery < 20%
+    {
+      if(elapsed_time_LED > 1000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, LOW);
+        digitalWrite(RED_LED, ledState);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    case 2: //Battery > 20%
+    {
+      if(elapsed_time_LED > 2000){
+        // if the LED is off turn it on and vice-versa:
+        ledState = (ledState == LOW) ? HIGH : LOW;
+
+        // set the LED with the ledState of the variable:
+        digitalWrite(GRN_LED, ledState);
+        digitalWrite(RED_LED, LOW);
+        previous_time_LED = millis();
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
