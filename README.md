@@ -41,7 +41,7 @@ Opening Thingsboard Dashboard
 
 WiFi Autoconnect
 ---------------------------------------------------------------------------------------------------------------------------
-- 1.) Power on programmed device
+- 1.) Power on programmed device and connect to the SpO2ap/ECGap with the default password "12345678"
 - 2.) Navigate to "192.168.10.101/_ac" with SpO2ap and "192.168.10.102/_ac" with ECGap on your mobile device's web browser
 - 3.) Press settings icon
 - 4.) Press menu icon
