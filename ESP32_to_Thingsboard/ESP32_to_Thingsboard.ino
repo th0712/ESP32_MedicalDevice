@@ -347,7 +347,7 @@ void setup()
   Config.immediateStart = true;
   Config.hostName = "esp32-02";
   Portal.config(Config);
-  Portal.config(Config);
+//   Portal.config(Config);
 
   // Load aux. page
   Timezone.load(AUX_TIMEZONE);
