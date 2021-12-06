@@ -173,8 +173,8 @@ int ledState = LOW;   // ledState used to set the LED
 #define ADS1292_CS_PIN 15
 #define ADS1292_START_PIN 0
 #define ADS1292_PWDN_PIN 2
-#define GRN_LED 27
-#define RED_LED 26
+#define GRN_LED 27          //TBD after soldering
+#define RED_LED 26          //TBD after soldering
 #define BATTERY_IN 39
 
 #define TEMPERATURE 0
@@ -338,9 +338,15 @@ void setup()
   
   // Enable saved past credential by autoReconnect option,
   // even once it is disconnected.
-  Config.autoReconnect = true;
-  Config.hostName = "esp32-01";
-  
+  Config.apid = "ECGap";
+  Config.apip =  IPAddress(192,168,10,102);
+  Config.autoReconnect = false;
+  Config.retainPortal = true;
+  Config.autoRise = true;
+  //Config.preserveAPMode = true;
+  Config.immediateStart = true;
+  Config.hostName = "esp32-02";
+  Portal.config(Config);
   Portal.config(Config);
 
   // Load aux. page
@@ -391,9 +397,10 @@ void loop()
   percentage = 2808.3808*pow(voltage,4)-43560.9157*pow(voltage,3)+252848.5888*pow(voltage,2)-650767.4615*voltage+626532.5703; //curve fit of LiPo
   if(voltage > 4.19) percentage = 100; //upper limit
   if(voltage < 3.5) percentage = 0; //Lower limit
-  if(percentage < 10){
+  
+  if(percentage < 33){
     battStatus = 0;
-  }else if(percentage < 20){
+  }else if(percentage < 66){
     battStatus = 1;
   }else{
     battStatus = 2;
@@ -510,15 +517,15 @@ void getAndSendECG(unsigned long long real_time)
   tb.sendTelemetryJson(PPG_data);
 
   //save data for PLX-DAQ serial monitor
-      Serial.print("DATA,DATE,TIME,");
-      Serial.print(ts);
-      Serial.print(",");
-      Serial.print(s32DaqVals[1]);
-      Serial.print(",");
-      Serial.print(ecg_filterout[0]);
-      Serial.println(",");
-      Serial.print(s32DaqVals[0]);
-      Serial.println(",");
+     // Serial.print("DATA,DATE,TIME,");
+      //Serial.print(ts);
+      //Serial.print(",");
+      //Serial.print(s32DaqVals[1]);
+      //Serial.print(",");
+      //Serial.print(ecg_filterout[0]);
+      //Serial.println(",");
+      //Serial.print(s32DaqVals[0]);
+      //Serial.println(",");
 }
 
 /*
@@ -905,7 +912,7 @@ double ReadVoltage(uint8_t pin){
 
 void LEDFunction (int battStatus){
   switch(battStatus){
-    case 0: //Battery criticially low (less than 10%)
+    case 0: //Battery criticially low (less than 33%)
     {
       if(elapsed_time_LED > 1000){
         // if the LED is off turn it on and vice-versa:
@@ -918,20 +925,20 @@ void LEDFunction (int battStatus){
       }
       break;
     }
-    case 1: //Battery < 20%
+    case 1: //Battery < 66%
     {
       if(elapsed_time_LED > 1000){
         // if the LED is off turn it on and vice-versa:
         ledState = (ledState == LOW) ? HIGH : LOW;
 
         // set the LED with the ledState of the variable:
-        digitalWrite(GRN_LED, LOW);
+        digitalWrite(GRN_LED, ledState);
         digitalWrite(RED_LED, ledState);
         previous_time_LED = millis();
       }
       break;
     }
-    case 2: //Battery > 20%
+    case 2: //Battery > 66%
     {
       if(elapsed_time_LED > 2000){
         // if the LED is off turn it on and vice-versa:
@@ -948,4 +955,3 @@ void LEDFunction (int battStatus){
       break;
     }
   }
-}

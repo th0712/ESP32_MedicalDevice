@@ -219,9 +219,15 @@ void setup()
     // Serial.begin(57600);
   //Serial.begin(9600);
   //InitWiFi();
-  
+  //LED and battery read pins
+  pinMode(GRN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BATTERY_IN, INPUT);
+  digitalWrite(RED_LED, HIGH);
   // Enable saved past credential by autoReconnect option,
   // even once it is disconnected.
+  Config.apid = "SpO2ap";
+  Config.apip =  IPAddress(192,168,10,101);
   Config.autoReconnect = false;
   Config.retainPortal = true;
   Config.autoRise = true;
@@ -247,11 +253,7 @@ void setup()
   
   Serial.println("Intilazition AFE44xx.. ");
   delay(2000) ;   // pause for a moment
-    //LED and battery read pins
-  pinMode(GRN_LED, OUTPUT);
-  pinMode(RED_LED, OUTPUT);
-  pinMode(BATTERY_IN, INPUT);
-  digitalWrite(RED_LED, HIGH);
+
   analogReadResolution(12);
   //SPI.begin();
   SPI.begin(14,12,13,15);
@@ -309,9 +311,9 @@ void loop()
   if(voltage > 4.19) percentage = 100; //upper limit
   if(voltage < 3.5) percentage = 0; //Lower limit
   
-  if(percentage < 10){
+  if(percentage < 33){
     battStatus = 0;
-  }else if(percentage < 50){
+  }else if(percentage < 66){
     battStatus = 1;
   }else{
     battStatus = 2;
@@ -371,11 +373,11 @@ void loop()
             else
             {
 
-      Serial.print(" Sp02 : ");
-      Serial.print(n_spo2);
-      Serial.print("% ,");
-      Serial.print("Pulse rate :");
-      Serial.println(n_heart_rate);
+      //Serial.print(" Sp02 : ");
+      //Serial.print(n_spo2);
+      //Serial.print("% ,");
+      //Serial.print("Pulse rate :");
+      //Serial.println(n_heart_rate);
 
       tb.sendTelemetryFloat("SpO2", n_spo2);
       tb.sendTelemetryFloat("Pulse rate", n_heart_rate);
@@ -410,13 +412,13 @@ void getAndSendPPG(int n_buffer_count, unsigned long long real_time)
   tb.sendTelemetryJson(PPG_data);
 
   //save data for PLX-DAQ serial monitor
-      Serial.print("DATA,DATE,TIME,");
-      Serial.print(ts);
-      Serial.print(",");
-      Serial.print(aun_ir_buffer[n_buffer_count]);
-      Serial.print(",");
-      Serial.print(aun_red_buffer[n_buffer_count]);
-      Serial.println(",");
+      //Serial.print("DATA,DATE,TIME,");
+      //Serial.print(ts);
+      //Serial.print(",");
+      //Serial.print(aun_ir_buffer[n_buffer_count]);
+      //Serial.print(",");
+      //Serial.print(aun_red_buffer[n_buffer_count]);
+      //Serial.println(",");
 }
 
 
@@ -794,7 +796,7 @@ double ReadVoltage(uint8_t pin){
 
 void LEDFunction (int battStatus){
   switch(battStatus){
-    case 0: //Battery criticially low (less than 10%)
+    case 0: //Battery criticially low (less than 33%)
     {
       if(elapsed_time_LED > 1000){
         // if the LED is off turn it on and vice-versa:
@@ -807,20 +809,20 @@ void LEDFunction (int battStatus){
       }
       break;
     }
-    case 1: //Battery < 20%
+    case 1: //Battery < 66%
     {
       if(elapsed_time_LED > 1000){
         // if the LED is off turn it on and vice-versa:
         ledState = (ledState == LOW) ? HIGH : LOW;
 
         // set the LED with the ledState of the variable:
-        digitalWrite(GRN_LED, LOW);
+        digitalWrite(GRN_LED, ledState);
         digitalWrite(RED_LED, ledState);
         previous_time_LED = millis();
       }
       break;
     }
-    case 2: //Battery > 20%
+    case 2: //Battery > 66%
     {
       if(elapsed_time_LED > 2000){
         // if the LED is off turn it on and vice-versa:
