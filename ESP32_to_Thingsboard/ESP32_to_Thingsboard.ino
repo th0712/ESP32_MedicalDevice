@@ -176,7 +176,7 @@ int ledState = LOW;   // ledState used to set the LED
 #define GRN_LED 27          //TBD after soldering
 #define RED_LED 26          //TBD after soldering
 #define BATTERY_IN 39
-
+#define CHARGER 18
 #define TEMPERATURE 0
 #define FILTERORDER         161
 /* DC Removal Numerator Coeff*/
@@ -326,6 +326,7 @@ void setup()
   //LED and battery read pins
   pinMode(GRN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
+  pinMode(CHARGER,OUTPUT);
   pinMode(BATTERY_IN, INPUT);
   digitalWrite(RED_LED, HIGH);
 
@@ -397,6 +398,10 @@ void loop()
   percentage = 2808.3808*pow(voltage,4)-43560.9157*pow(voltage,3)+252848.5888*pow(voltage,2)-650767.4615*voltage+626532.5703; //curve fit of LiPo
   if(voltage > 4.19) percentage = 100; //upper limit
   if(voltage < 3.5) percentage = 0; //Lower limit
+
+  //Charge logic
+  if(voltage > 4.1) digitalWrite(CHARGER, LOW);
+  if(voltage < 3.9) digitalWrite(CHARGER,HIGH);
   
   if(percentage < 33){
     battStatus = 0;
